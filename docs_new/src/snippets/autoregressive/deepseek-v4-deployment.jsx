@@ -356,8 +356,8 @@ export const DeepSeekV4Deployment = () => {
         recipeEnv.push(isBig
           ? "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=128"
           : "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256");
-      } else {
-        // Blackwell: small=1024, big=256 (allinone ternary).
+      } else if (!(isBig && hardware === "b200")) {
+        // B200/B300 Pro balanced uses flashinfer_mxfp4 — no dispatch token env needed.
         recipeEnv.push(isBig
           ? "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256"
           : "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=1024");
@@ -367,6 +367,10 @@ export const DeepSeekV4Deployment = () => {
         recipeEnv.push(isBig
           ? "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=128"
           : "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256");
+      } else if (isBig && hardware === "b200") {
+        // B200/B300 Pro accuracy-verified: dispatch tokens auto (0) + NVSHMEM.
+        recipeEnv.push("SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=0");
+        recipeEnv.push("NVSHMEM_DISABLE_IB=1");
       } else {
         recipeEnv.push(isBig
           ? "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256"
@@ -422,10 +426,17 @@ export const DeepSeekV4Deployment = () => {
       flags.push("  --speculative-eagle-topk 1");
       flags.push("  --speculative-num-draft-tokens 4");
       if (hardware !== "h200") {
-        flags.push("  --chunked-prefill-size 4096");
+        // B200/B300 Pro accuracy-verified: chunked-prefill-size 8192
+        flags.push(isBig ? "  --chunked-prefill-size 8192" : "  --chunked-prefill-size 4096");
         flags.push("  --disable-flashinfer-autotune");
+        flags.push("  --swa-full-tokens-ratio 0.1");
       }
-      if (isBig) flags.push("  --mem-fraction-static 0.88");
+      // B200/B300 Pro accuracy-verified: mem-fraction-static 0.90
+      if (isBig && hardware !== "h200") {
+        flags.push("  --mem-fraction-static 0.90");
+      } else if (isBig) {
+        flags.push("  --mem-fraction-static 0.88");
+      }
     } else if (recipe === "balanced") {
       // allinone balanced: TP + DP + DP-attn + DeepEP + MTP_112.
       //   H200 small: cg=128 max-run=128  |  H200 big: cg=128 max-run=128 (same)
@@ -435,7 +446,15 @@ export const DeepSeekV4Deployment = () => {
       flags.push(`  --dp ${tp}`);
       flags.push("  --enable-dp-attention");
       if (multinode) flags.push(...multiNodeFlags(nnodes));
-      flags.push("  --moe-a2a-backend deepep");
+      // B200/B300 Pro accuracy-verified: flashinfer_mxfp4 (not deepep) for balanced.
+      if (isBig && hardware === "b200") {
+        flags.push("  --moe-runner-backend flashinfer_mxfp4");
+        flags.push("  --disable-flashinfer-autotune");
+        flags.push("  --chunked-prefill-size 32768");
+        flags.push("  --swa-full-tokens-ratio 0.1");
+      } else {
+        flags.push("  --moe-a2a-backend deepep");
+      }
       flags.push("  --speculative-algo EAGLE");
       flags.push("  --speculative-num-steps 1");
       flags.push("  --speculative-eagle-topk 1");
@@ -447,7 +466,7 @@ export const DeepSeekV4Deployment = () => {
       } else if (isBig && hardware === "gb200") {
         flags.push("  --mem-fraction-static 0.78");
       } else if (isBig) {
-        flags.push("  --mem-fraction-static 0.82");
+        flags.push("  --mem-fraction-static 0.92");
       }
       if (hardware === "h200" && isBig) {
         flags.push("  --cuda-graph-max-bs 8");
@@ -456,8 +475,7 @@ export const DeepSeekV4Deployment = () => {
         flags.push("  --cuda-graph-max-bs 128");
         flags.push("  --max-running-requests 128");
       } else if (isBig && hardware === "b200") {
-        flags.push("  --cuda-graph-max-bs 64");
-        flags.push("  --max-running-requests 128");
+        flags.push("  --cuda-graph-max-bs 256");
       } else if (isBig && hardware === "gb300") {
         flags.push("  --cuda-graph-max-bs 128");
         flags.push("  --max-running-requests 256");
@@ -485,14 +503,18 @@ export const DeepSeekV4Deployment = () => {
       } else if (isBig && hardware === "gb200") {
         flags.push("  --mem-fraction-static 0.78");
       } else if (isBig) {
-        flags.push("  --mem-fraction-static 0.82");
+        flags.push("  --mem-fraction-static 0.835");
       }
       if (hardware === "h200") {
         flags.push("  --cuda-graph-max-bs 128");
         flags.push("  --max-running-requests 256");
       } else if (isBig && hardware === "b200") {
-        flags.push("  --cuda-graph-max-bs 64");
-        flags.push("  --max-running-requests 256");
+        // B200/B300 Pro accuracy-verified max-throughput config.
+        flags.push("  --cuda-graph-max-bs 544");
+        flags.push("  --swa-full-tokens-ratio 0.075");
+        flags.push("  --chunked-prefill-size 65536");
+        flags.push("  --tokenizer-worker-num 8");
+        flags.push("  --enable-prefill-delayer");
       } else if (isBig && hardware === "gb300") {
         flags.push("  --cuda-graph-max-bs 128");
         flags.push("  --max-running-requests 256");
