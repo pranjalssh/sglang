@@ -105,6 +105,11 @@ from sglang.srt.layers.attention.attention_registry import (
     ATTENTION_BACKENDS,
     attn_backend_wrapper,
 )
+from sglang.srt.layers.attention.indexer_topk_capturer import (
+    create_indexer_capturer,
+    get_global_indexer_capturer,
+    set_global_indexer_capturer,
+)
 from sglang.srt.layers.attention.nsa.utils import is_nsa_enable_prefill_cp
 from sglang.srt.layers.attention.tbo_backend import TboAttnBackend
 from sglang.srt.layers.dp_attention import (
@@ -750,6 +755,8 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         # Init routed experts capturer
         self.init_routed_experts_capturer()
 
+        self.init_indexer_capturer()
+
         # TODO: Refactor device-specific init branches into platform interface (separate PR).
         # Must be called BEFORE init_device_graphs() so CUDA graph capture
         # runs with aux hidden state capture enabled.
@@ -816,6 +823,17 @@ class ModelRunner(ModelRunnerKVCacheMixin):
                 enable=get_global_server_args().enable_return_routed_experts,
                 model_config=self.model_config,
                 num_fused_shared_experts=num_fused_shared_experts,
+                num_tokens=self.max_total_num_tokens + self.page_size,
+                max_running_requests=self.max_running_requests,
+                device=self.device,
+            )
+        )
+
+    def init_indexer_capturer(self):
+        set_global_indexer_capturer(
+            create_indexer_capturer(
+                enable=get_global_server_args().enable_return_indexer_topk,
+                model_config=self.model_config,
                 num_tokens=self.max_total_num_tokens + self.page_size,
                 max_running_requests=self.max_running_requests,
                 device=self.device,
@@ -3224,6 +3242,12 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             can_run_graph=output.can_run_graph,
             cuda_graph_batch=getattr(self.graph_runner, "bs", None),
             no_copy_to_cpu=no_copy_to_cpu,
+        )
+
+        get_global_indexer_capturer().on_forward_end(
+            forward_batch=forward_batch,
+            can_run_graph=output.can_run_graph,
+            cuda_graph_batch=getattr(self.graph_runner, "bs", None),
         )
 
         if self.eplb_manager is not None:

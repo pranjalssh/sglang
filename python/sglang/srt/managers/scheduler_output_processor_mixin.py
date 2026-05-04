@@ -7,6 +7,9 @@ import torch
 
 from sglang.srt.disaggregation.utils import DisaggregationMode
 from sglang.srt.environ import envs
+from sglang.srt.layers.attention.indexer_topk_capturer import (
+    get_global_indexer_capturer,
+)
 from sglang.srt.layers.logits_processor import LogitsProcessorOutput
 from sglang.srt.layers.moe.routed_experts_capturer import get_global_experts_capturer
 from sglang.srt.managers.io_struct import (
@@ -112,6 +115,13 @@ class SchedulerOutputProcessorMixin:
             req_to_token_pool=self.req_to_token_pool,
         )
 
+    def maybe_collect_indexer_topk(self: Scheduler, req: Req):
+        req.indexer_topk = get_global_indexer_capturer().get_topk(
+            req_pool_idx=req.req_pool_idx,
+            seqlen=req.seqlen,
+            req_to_token_pool=self.req_to_token_pool,
+        )
+
     def maybe_collect_customized_info(
         self: Scheduler, i: int, req: Req, logits_output: LogitsProcessorOutput
     ):
@@ -201,6 +211,7 @@ class SchedulerOutputProcessorMixin:
                     req.check_finished()
                     if req.finished():
                         self.maybe_collect_routed_experts(req)
+                        self.maybe_collect_indexer_topk(req)
                         release_kv_cache(req, self.tree_cache)
                         req.time_stats.set_completion_time()
                     elif not batch.decoding_reqs or req not in batch.decoding_reqs:
@@ -571,6 +582,7 @@ class SchedulerOutputProcessorMixin:
             if req.multimodal_inputs is not None and req.session is None:
                 req.multimodal_inputs.release_features()
             self.maybe_collect_routed_experts(req)
+            self.maybe_collect_indexer_topk(req)
 
             if self.server_args.disaggregation_decode_enable_offload_kvcache:
                 # Asynchronously offload KV cache; release_kv_cache will be called after Device->Host transfer completes
@@ -977,6 +989,7 @@ class SchedulerOutputProcessorMixin:
         output_hidden_states = None
         load = self.get_loads(GetLoadsReqInput(include=["core"]))
         routed_experts = None
+        indexer_topk = None
         customized_info = {}
 
         time_stats = []
@@ -1160,6 +1173,10 @@ class SchedulerOutputProcessorMixin:
                     if routed_experts is None:
                         routed_experts = []
                     routed_experts.append(req.routed_experts)
+                if req.return_indexer_topk:
+                    if indexer_topk is None:
+                        indexer_topk = []
+                    indexer_topk.append(req.indexer_topk)
 
                 if req.customized_info is not None:
                     for k, v in req.customized_info.items():
@@ -1216,6 +1233,7 @@ class SchedulerOutputProcessorMixin:
                     output_token_entropy_val=None,
                     output_hidden_states=output_hidden_states,
                     routed_experts=routed_experts,
+                    indexer_topk=indexer_topk,
                     customized_info=customized_info,
                     placeholder_tokens_idx=None,
                     placeholder_tokens_val=None,
