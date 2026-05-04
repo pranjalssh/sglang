@@ -116,7 +116,10 @@ class SchedulerOutputProcessorMixin:
         )
 
     def maybe_collect_indexer_topk(self: Scheduler, req: Req):
-        req.indexer_topk = get_global_indexer_capturer().get_topk(
+        capturer = get_global_indexer_capturer()
+        if capturer is None:
+            return
+        req.indexer_topk = capturer.get_topk(
             req_pool_idx=req.req_pool_idx,
             seqlen=req.seqlen,
             req_to_token_pool=self.req_to_token_pool,

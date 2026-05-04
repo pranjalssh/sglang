@@ -3244,11 +3244,12 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             no_copy_to_cpu=no_copy_to_cpu,
         )
 
-        get_global_indexer_capturer().on_forward_end(
-            forward_batch=forward_batch,
-            can_run_graph=output.can_run_graph,
-            cuda_graph_batch=getattr(self.graph_runner, "bs", None),
-        )
+        if (indexer_capturer := get_global_indexer_capturer()) is not None:
+            indexer_capturer.on_forward_end(
+                forward_batch=forward_batch,
+                can_run_graph=output.can_run_graph,
+                cuda_graph_batch=getattr(self.graph_runner, "bs", None),
+            )
 
         if self.eplb_manager is not None:
             self.eplb_manager.on_forward_pass_end()

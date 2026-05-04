@@ -2,12 +2,7 @@ import logging
 from typing import TYPE_CHECKING, Optional
 
 from sglang.srt.layers.dp_attention import get_attention_tp_size
-from sglang.srt.layers.topk_capturer_base import (
-    _GB,
-    _MB,
-    BaseTopkCapturer,
-    BaseTopkCapturerNoop,
-)
+from sglang.srt.layers.topk_capturer_base import _GB, _MB, BaseTopkCapturer
 
 if TYPE_CHECKING:
     from sglang.srt.configs.model_config import ModelConfig
@@ -29,20 +24,14 @@ class IndexerTopkCapturer(BaseTopkCapturer):
         self,
         model_config: "ModelConfig",
         num_tokens: int,
+        num_indexer_layers: int,
         max_running_requests: int,
         device: str,
     ):
         from sglang.srt.server_args import get_global_server_args
 
-        self.num_indexer_layers = _count_indexer_layers(model_config)
+        self.num_indexer_layers = num_indexer_layers
         self.index_topk = getattr(model_config.hf_text_config, "index_topk", INDEX_TOPK)
-
-        if self.num_indexer_layers == 0:
-            logger.warning("No indexer layers found, IndexerTopkCapturer disabled")
-            self._enabled = False
-            return
-
-        self._enabled = True
 
         server_args = get_global_server_args()
         max_batch_size = max(
@@ -79,22 +68,15 @@ class IndexerTopkCapturer(BaseTopkCapturer):
             :num_tokens, :, : self.topk_size
         ].cpu()
 
-    def is_enabled(self) -> bool:
-        return self._enabled
+
+_global_indexer_capturer: Optional[IndexerTopkCapturer] = None
 
 
-class IndexerTopkCapturerNoop(BaseTopkCapturerNoop):
-    pass
-
-
-_global_indexer_capturer: Optional[IndexerTopkCapturer] = IndexerTopkCapturerNoop()
-
-
-def get_global_indexer_capturer():
+def get_global_indexer_capturer() -> Optional[IndexerTopkCapturer]:
     return _global_indexer_capturer
 
 
-def set_global_indexer_capturer(capturer):
+def set_global_indexer_capturer(capturer: Optional[IndexerTopkCapturer]):
     global _global_indexer_capturer
     _global_indexer_capturer = capturer
 
@@ -105,14 +87,17 @@ def create_indexer_capturer(
     num_tokens: int,
     max_running_requests: int,
     device: str,
-):
-    if enable:
-        capturer = IndexerTopkCapturer(
-            model_config=model_config,
-            num_tokens=num_tokens,
-            max_running_requests=max_running_requests,
-            device=device,
-        )
-        if capturer.is_enabled():
-            return capturer
-    return IndexerTopkCapturerNoop()
+) -> Optional[IndexerTopkCapturer]:
+    if not enable:
+        return None
+    num_indexer_layers = _count_indexer_layers(model_config)
+    if num_indexer_layers == 0:
+        logger.warning("No indexer layers found, IndexerTopkCapturer disabled")
+        return None
+    return IndexerTopkCapturer(
+        model_config=model_config,
+        num_tokens=num_tokens,
+        num_indexer_layers=num_indexer_layers,
+        max_running_requests=max_running_requests,
+        device=device,
+    )

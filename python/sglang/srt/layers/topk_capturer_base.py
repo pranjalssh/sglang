@@ -121,27 +121,3 @@ class BaseTopkCapturer:
         cuda_graph_batch: Optional[int],
     ):
         self._sync_to_host(forward_batch, can_run_graph, cuda_graph_batch)
-
-    def is_enabled(self) -> bool:
-        return True
-
-
-class BaseTopkCapturerNoop:
-    def capture(self, layer_id: int, topk_indices: torch.Tensor):
-        pass
-
-    def get_topk(
-        self, req_pool_idx: int, seqlen: int, req_to_token_pool: ReqToTokenPool
-    ):
-        return None
-
-    def on_forward_end(
-        self,
-        forward_batch: ForwardBatch,
-        can_run_graph: bool,
-        cuda_graph_batch: Optional[int],
-    ):
-        pass
-
-    def is_enabled(self) -> bool:
-        return False
