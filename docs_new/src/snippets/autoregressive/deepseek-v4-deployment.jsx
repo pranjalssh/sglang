@@ -351,13 +351,41 @@ export const DeepSeekV4Deployment = () => {
       } else if (hardware === "gb200" && isBig) {
         recipeEnv.push("SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256");
       }
+      // B200/B300 Pro accuracy-verified env vars.
+      if (isBig && hardware === "b200") {
+        recipeEnv.push(
+          "SGLANG_JIT_DEEPGEMM_PRECOMPILE=0",
+          "SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1",
+          "SGLANG_OPT_USE_JIT_NORM=1",
+          "SGLANG_OPT_USE_JIT_INDEXER_METADATA=1",
+          "SGLANG_OPT_USE_TOPK_V2=1",
+          "SGLANG_OPT_USE_CUSTOM_ALL_REDUCE_V2=1",
+        );
+      }
     } else if (recipe === "balanced") {
       if (hardware === "h200") {
         recipeEnv.push(isBig
           ? "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=128"
           : "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256");
-      } else if (!(isBig && hardware === "b200")) {
-        // B200/B300 Pro balanced uses flashinfer_mxfp4 — no dispatch token env needed.
+      } else if (isBig && hardware === "b200") {
+        // B200/B300 Pro accuracy-verified env vars.
+        recipeEnv.push(
+          "SGLANG_JIT_DEEPGEMM_PRECOMPILE=0",
+          "SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1",
+          "SGLANG_OPT_USE_JIT_NORM=1",
+          "SGLANG_OPT_USE_JIT_INDEXER_METADATA=1",
+          "SGLANG_OPT_USE_TOPK_V2=1",
+          "SGLANG_OPT_USE_CUSTOM_ALL_REDUCE_V2=1",
+          "SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARGIN=1",
+          "SGLANG_OPT_USE_DEEPGEMM_MEGA_MOE=0",
+          "SGLANG_OPT_FIX_HASH_MEGA_MOE=0",
+          "SGLANG_OPT_USE_FAST_MASK_EP=1",
+          "SGLANG_OPT_FIX_MEGA_MOE_MEMORY=1",
+          "SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=4096",
+          "SGLANG_OPT_FIX_NEXTN_MEGA_MOE=1",
+          "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=0",
+        );
+      } else {
         recipeEnv.push(isBig
           ? "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256"
           : "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=1024");
@@ -368,9 +396,25 @@ export const DeepSeekV4Deployment = () => {
           ? "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=128"
           : "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256");
       } else if (isBig && hardware === "b200") {
-        // B200/B300 Pro accuracy-verified: dispatch tokens auto (0) + NVSHMEM.
-        recipeEnv.push("SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=0");
-        recipeEnv.push("NVSHMEM_DISABLE_IB=1");
+        // B200/B300 Pro accuracy-verified env vars.
+        recipeEnv.push(
+          "SGLANG_JIT_DEEPGEMM_PRECOMPILE=0",
+          "SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1",
+          "SGLANG_OPT_USE_JIT_NORM=1",
+          "SGLANG_OPT_USE_JIT_INDEXER_METADATA=1",
+          "SGLANG_OPT_USE_TOPK_V2=1",
+          "SGLANG_OPT_USE_CUSTOM_ALL_REDUCE_V2=1",
+          "SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARGIN=1",
+          "SGLANG_OPT_USE_FAST_MASK_EP=1",
+          "SGLANG_OPT_FIX_MEGA_MOE_MEMORY=1",
+          "SGLANG_OPT_FIX_NEXTN_MEGA_MOE=1",
+          "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=0",
+          "NVSHMEM_DISABLE_IB=1",
+          "SGLANG_OPT_SWA_RELEASE_LEAF_LOCK_AFTER_WINDOW=1",
+          "SGLANG_OPT_USE_DEEPGEMM_MEGA_MOE=1",
+          "SGLANG_OPT_FIX_HASH_MEGA_MOE=1",
+          "SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=8320",
+        );
       } else {
         recipeEnv.push(isBig
           ? "SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256"
