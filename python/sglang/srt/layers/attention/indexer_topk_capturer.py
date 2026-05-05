@@ -21,14 +21,13 @@ class IndexerTopkCapturer(BaseTopkCapturer):
         self.num_indexer_layers = num_indexer_layers
         self.index_topk = index_topk
 
-        server_args = get_global_server_args()
-        max_batch_size = max(
-            server_args.chunked_prefill_size * server_args.dp_size,
-            max_running_requests,
-        )
-
         attn_tp_size = get_attention_tp_size()
         assert attn_tp_size == 1, "IndexerTopkCapturer now only supports DP attention"
+
+        # DP-attention capture is per-rank-local: each rank writes [:local_batch, ...]
+        # to its own device_cache, so the buffer only needs to fit one rank's batch.
+        server_args = get_global_server_args()
+        max_batch_size = max(server_args.chunked_prefill_size, max_running_requests)
 
         super().__init__(
             num_tokens=num_tokens,
