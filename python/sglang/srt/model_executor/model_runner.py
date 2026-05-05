@@ -3239,12 +3239,13 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         output.expert_distribution_metrics = recorder_outputs.get("metrics")
 
         no_copy_to_cpu = not self.server_args.disable_overlap_schedule
-        output.routed_experts_output = get_global_experts_capturer().on_forward_end(
-            forward_batch=forward_batch,
-            can_run_graph=output.can_run_graph,
-            cuda_graph_batch=getattr(self.graph_runner, "bs", None),
-            no_copy_to_cpu=no_copy_to_cpu,
-        )
+        if (experts_capturer := get_global_experts_capturer()) is not None:
+            output.routed_experts_output = experts_capturer.on_forward_end(
+                forward_batch=forward_batch,
+                can_run_graph=output.can_run_graph,
+                cuda_graph_batch=getattr(self.graph_runner, "bs", None),
+                no_copy_to_cpu=no_copy_to_cpu,
+            )
 
         if (indexer_capturer := get_global_indexer_capturer()) is not None:
             output.indexer_topk_output = indexer_capturer.on_forward_end(

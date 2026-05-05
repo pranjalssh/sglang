@@ -1,6 +1,5 @@
 import dataclasses
 import logging
-from abc import ABC
 from typing import Optional
 
 import numpy as np
@@ -122,7 +121,9 @@ class _RoutedExpertsHostCache:
         )
 
 
-class RoutedExpertsCapturer(ABC):
+class RoutedExpertsCapturer:
+    """Capturer for routed experts with host buffer."""
+
     @staticmethod
     def create(
         enable: bool,
@@ -131,51 +132,16 @@ class RoutedExpertsCapturer(ABC):
         num_tokens: int,
         max_running_requests: int,
         device: str,
-    ):
-        if enable:
-            return _RoutedExpertsCapturerReal(
-                model_config,
-                num_tokens=num_tokens,
-                max_running_requests=max_running_requests,
-                num_fused_shared_experts=num_fused_shared_experts,
-                device=device,
-            )
-        else:
-            return _RoutedExpertsCapturerNoop()
-
-    def _sync_fwd_experts_buffer_DtoH(
-        self,
-        forward_batch: ForwardBatch,
-        can_run_graph: bool,
-        cuda_graph_batch: int,
-    ):
-        raise NotImplementedError
-
-    def capture(self, layer_id: int, topk_ids: torch.Tensor):
-        raise NotImplementedError
-
-    def get_routed_experts(
-        self,
-        req_pool_idx: int,
-        seqlen: int,
-        req_to_token_pool: ReqToTokenPool,
-    ):
-        raise NotImplementedError
-
-    def on_forward_end(
-        self, forward_batch, can_run_graph, cuda_graph_batch, no_copy_to_cpu=False
-    ) -> Optional[RoutedExpertsOutput]:
-        raise NotImplementedError
-
-    def get_host_cache(self):
-        raise NotImplementedError
-
-    def get_device_cache(self):
-        raise NotImplementedError
-
-
-class _RoutedExpertsCapturerReal(RoutedExpertsCapturer):
-    """Capturer for routed experts with host buffer"""
+    ) -> Optional["RoutedExpertsCapturer"]:
+        if not enable:
+            return None
+        return RoutedExpertsCapturer(
+            model_config,
+            num_tokens=num_tokens,
+            max_running_requests=max_running_requests,
+            num_fused_shared_experts=num_fused_shared_experts,
+            device=device,
+        )
 
     def __init__(
         self,
@@ -281,49 +247,14 @@ class _RoutedExpertsCapturerReal(RoutedExpertsCapturer):
         return self.device_cache
 
 
-class _RoutedExpertsCapturerNoop(RoutedExpertsCapturer):
-    def __init__(self):
-        pass
-
-    def _sync_fwd_experts_buffer_DtoH(
-        self,
-        forward_batch: ForwardBatch,
-        can_run_graph: bool,
-        cuda_graph_batch: int,
-    ):
-        pass
-
-    def capture(self, layer_id: int, topk_ids: torch.Tensor):
-        pass
-
-    def get_routed_experts(
-        self,
-        req_pool_idx: int,
-        seqlen: int,
-        req_to_token_pool: ReqToTokenPool,
-    ):
-        pass
-
-    def on_forward_end(
-        self, forward_batch, can_run_graph, cuda_graph_batch, no_copy_to_cpu=False
-    ) -> Optional[RoutedExpertsOutput]:
-        return None
-
-    def get_host_cache(self):
-        pass
-
-    def get_device_cache(self):
-        pass
+_global_expert_capturer: Optional[RoutedExpertsCapturer] = None
 
 
-_global_expert_capturer: Optional[RoutedExpertsCapturer] = _RoutedExpertsCapturerNoop()
-
-
-def get_global_experts_capturer():
+def get_global_experts_capturer() -> Optional[RoutedExpertsCapturer]:
     return _global_expert_capturer
 
 
-def set_global_experts_capturer(capturer: RoutedExpertsCapturer):
+def set_global_experts_capturer(capturer: Optional[RoutedExpertsCapturer]):
     global _global_expert_capturer
     _global_expert_capturer = capturer
 
