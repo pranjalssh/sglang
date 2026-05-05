@@ -13,10 +13,8 @@ _GB = 1024 * 1024 * 1024
 _MB = 1024 * 1024
 
 
-def get_tensor_size_bytes(t: torch.Tensor):
-    import numpy as np
-
-    return int(np.prod(t.shape)) * t.dtype.itemsize
+def get_tensor_size_bytes(t: torch.Tensor) -> int:
+    return t.numel() * t.element_size()
 
 
 class BaseDeviceCache:
