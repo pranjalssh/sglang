@@ -156,6 +156,9 @@ class SchedulerOutputProcessorMixin:
             if result.routed_experts_output is not None:
                 result.routed_experts_output.finalize()
                 result.routed_experts_output = None
+            if result.indexer_topk_output is not None:
+                result.indexer_topk_output.finalize()
+                result.indexer_topk_output = None
 
             (
                 logits_output,
@@ -418,6 +421,9 @@ class SchedulerOutputProcessorMixin:
         if result.routed_experts_output is not None:
             result.routed_experts_output.finalize()
             result.routed_experts_output = None
+        if result.indexer_topk_output is not None:
+            result.indexer_topk_output.finalize()
+            result.indexer_topk_output = None
 
         logits_output, next_token_ids, can_run_cuda_graph = (
             result.logits_output,

@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 from typing import Optional
 
@@ -55,6 +56,25 @@ class BaseHostCache:
         return get_tensor_size_bytes(self.buffer)
 
 
+@dataclasses.dataclass
+class TopkCaptureOutput:
+    """Holds GPU tensors captured during forward for overlap scheduling.
+    Call copy_to_cpu() inside forward stream (before copy_done.record()),
+    then finalize() after copy_done.synchronize().
+    """
+
+    out_cache_loc: torch.Tensor
+    topk: torch.Tensor
+    host_cache: BaseHostCache
+
+    def copy_to_cpu(self):
+        self.out_cache_loc = self.out_cache_loc.to("cpu", non_blocking=True)
+        self.topk = self.topk.to("cpu", non_blocking=True)
+
+    def finalize(self):
+        self.host_cache.buffer[self.out_cache_loc] = self.topk
+
+
 class BaseTopkCapturer:
     def __init__(
         self,
@@ -75,12 +95,13 @@ class BaseTopkCapturer:
     def capture(self, layer_id: int, topk_indices: torch.Tensor):
         self.device_cache.capture(layer_id, topk_indices)
 
-    def _sync_to_host(
+    def _get_local_slice(
         self,
         forward_batch: ForwardBatch,
         can_run_graph: bool,
         cuda_graph_batch: Optional[int],
-    ):
+    ) -> torch.Tensor:
+        """Return the device_cache slice for this forward batch, GPU-resident."""
         from sglang.srt.layers.dp_attention import (
             get_attention_dp_rank,
             get_dp_local_info,
@@ -91,17 +112,14 @@ class BaseTopkCapturer:
             local_start_pos, local_num_tokens = get_dp_local_info(forward_batch)
             if can_run_graph:
                 local_start_pos = get_attention_dp_rank() * cuda_graph_batch
-                local_end_pos = local_start_pos + local_num_tokens
-            else:
-                local_end_pos = local_start_pos + local_num_tokens
+            local_end_pos = local_start_pos + local_num_tokens
         else:
             local_start_pos = 0
             local_end_pos = forward_batch.out_cache_loc.shape[0]
 
-        out_cache_loc_cpu = forward_batch.out_cache_loc.cpu()
-        self.host_cache.buffer[out_cache_loc_cpu] = self.device_cache.buffer[
+        return self.device_cache.buffer[
             local_start_pos:local_end_pos, :, : self.topk_size
-        ].cpu()
+        ]
 
     def get_topk(
         self,
@@ -119,5 +137,21 @@ class BaseTopkCapturer:
         forward_batch: ForwardBatch,
         can_run_graph: bool,
         cuda_graph_batch: Optional[int],
-    ):
-        self._sync_to_host(forward_batch, can_run_graph, cuda_graph_batch)
+        no_copy_to_cpu: bool = False,
+    ) -> Optional[TopkCaptureOutput]:
+        """If no_copy_to_cpu is True, return a TopkCaptureOutput holding GPU tensors so
+        the overlap thread can do non-blocking D2H + finalize itself. Otherwise sync
+        D2H inline and return None (legacy non-overlap path).
+        """
+        slice_gpu = self._get_local_slice(
+            forward_batch, can_run_graph, cuda_graph_batch
+        )
+        if no_copy_to_cpu:
+            return TopkCaptureOutput(
+                out_cache_loc=forward_batch.out_cache_loc,
+                topk=slice_gpu,
+                host_cache=self.host_cache,
+            )
+        out_cache_loc_cpu = forward_batch.out_cache_loc.cpu()
+        self.host_cache.buffer[out_cache_loc_cpu] = slice_gpu.cpu()
+        return None

@@ -130,6 +130,7 @@ from sglang.srt.layers.moe.routed_experts_capturer import (
 from sglang.srt.layers.pooler import EmbeddingPoolerOutput
 from sglang.srt.layers.quantization.fp8_kernel import fp8_dtype
 from sglang.srt.layers.sampler import create_sampler
+from sglang.srt.layers.topk_capturer_base import TopkCaptureOutput
 from sglang.srt.layers.torchao_utils import apply_torchao_config_to_model
 from sglang.srt.lora.lora_manager import LoRAManager
 from sglang.srt.lora.lora_registry import LoRARef
@@ -311,6 +312,7 @@ class ModelRunnerOutput:
     can_run_graph: bool
     expert_distribution_metrics: Optional[ExpertDistributionMetrics] = None
     routed_experts_output: Optional[RoutedExpertsOutput] = None
+    indexer_topk_output: Optional[TopkCaptureOutput] = None
 
 
 class ModelRunner(ModelRunnerKVCacheMixin):
@@ -3245,10 +3247,11 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         )
 
         if (indexer_capturer := get_global_indexer_capturer()) is not None:
-            indexer_capturer.on_forward_end(
+            output.indexer_topk_output = indexer_capturer.on_forward_end(
                 forward_batch=forward_batch,
                 can_run_graph=output.can_run_graph,
                 cuda_graph_batch=getattr(self.graph_runner, "bs", None),
+                no_copy_to_cpu=no_copy_to_cpu,
             )
 
         if self.eplb_manager is not None:
