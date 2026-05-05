@@ -101,25 +101,14 @@ class BaseTopkCapturer:
         can_run_graph: bool,
         cuda_graph_batch: Optional[int],
     ) -> torch.Tensor:
-        """Return the device_cache slice for this forward batch, GPU-resident."""
-        from sglang.srt.layers.dp_attention import (
-            get_attention_dp_rank,
-            get_dp_local_info,
-            is_dp_attention_enabled,
-        )
+        """Return the device_cache slice for this forward batch, GPU-resident.
 
-        if is_dp_attention_enabled():
-            local_start_pos, local_num_tokens = get_dp_local_info(forward_batch)
-            if can_run_graph:
-                local_start_pos = get_attention_dp_rank() * cuda_graph_batch
-            local_end_pos = local_start_pos + local_num_tokens
-        else:
-            local_start_pos = 0
-            local_end_pos = forward_batch.out_cache_loc.shape[0]
-
-        return self.device_cache.buffer[
-            local_start_pos:local_end_pos, :, : self.topk_size
-        ]
+        Default assumes per-rank-local capture: each rank writes [:local_num_tokens)
+        to its own device_cache. Subclasses with global-tensor capture semantics
+        (e.g. shared cuda graph buffer indexed by dp_rank) should override.
+        """
+        num_tokens = forward_batch.out_cache_loc.shape[0]
+        return self.device_cache.buffer[:num_tokens, :, : self.topk_size]
 
     def get_topk(
         self,

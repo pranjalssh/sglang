@@ -61,10 +61,6 @@ class IndexerTopkCapturer(BaseTopkCapturer):
             f"host_cache={host_size_gb:.2f}GB, device_cache={device_size_mb:.2f}MB"
         )
 
-    def _get_local_slice(self, forward_batch, can_run_graph, cuda_graph_batch):
-        num_tokens = forward_batch.out_cache_loc.shape[0]
-        return self.device_cache.buffer[:num_tokens, :, : self.topk_size]
-
 
 _global_indexer_capturer: Optional[IndexerTopkCapturer] = None
 
