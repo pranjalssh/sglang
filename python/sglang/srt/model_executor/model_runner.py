@@ -123,7 +123,6 @@ from sglang.srt.layers.dp_attention import (
 from sglang.srt.layers.logits_processor import LogitsProcessorOutput
 from sglang.srt.layers.moe.routed_experts_capturer import (
     RoutedExpertsCapturer,
-    RoutedExpertsOutput,
     get_global_experts_capturer,
     set_global_experts_capturer,
 )
@@ -311,7 +310,7 @@ class ModelRunnerOutput:
     logits_output: Union[LogitsProcessorOutput, PPProxyTensors]
     can_run_graph: bool
     expert_distribution_metrics: Optional[ExpertDistributionMetrics] = None
-    routed_experts_output: Optional[RoutedExpertsOutput] = None
+    routed_experts_output: Optional[TopkCaptureOutput] = None
     indexer_topk_output: Optional[TopkCaptureOutput] = None
 
 

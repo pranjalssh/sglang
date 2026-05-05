@@ -8,7 +8,6 @@ import torch
 
 from sglang.srt.eplb.expert_distribution import ExpertDistributionMetrics
 from sglang.srt.layers.logits_processor import LogitsProcessorOutput
-from sglang.srt.layers.moe.routed_experts_capturer import RoutedExpertsOutput
 from sglang.srt.layers.topk_capturer_base import TopkCaptureOutput
 from sglang.srt.managers.overlap_utils import FutureIndices
 from sglang.srt.managers.schedule_batch import Req
@@ -49,7 +48,7 @@ class GenerationBatchResult:
     next_draft_input: Optional[EagleDraftInput] = None
 
     # Routed experts: pending async D2H for overlap scheduling
-    routed_experts_output: Optional[RoutedExpertsOutput] = None
+    routed_experts_output: Optional[TopkCaptureOutput] = None
     indexer_topk_output: Optional[TopkCaptureOutput] = None
 
     # metrics

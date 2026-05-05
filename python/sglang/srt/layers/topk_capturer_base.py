@@ -28,14 +28,21 @@ class BaseDeviceCache:
         )
         self.num_layers = num_layers
         self.topk_size = topk_size
+        self._log_allocation()
 
     def capture(self, layer_id: int, topk_indices: torch.Tensor):
         batch = topk_indices.shape[0]
-        topk_dim = min(topk_indices.shape[1], self.topk_size)
-        self.buffer[:batch, layer_id, :topk_dim] = topk_indices[:, :topk_dim]
+        self.buffer[:batch, layer_id, :] = topk_indices
 
     def get_buffer_size_bytes(self):
         return get_tensor_size_bytes(self.buffer)
+
+    def _log_allocation(self):
+        size_mb = self.get_buffer_size_bytes() / _MB
+        logger.info(
+            f"DeviceCache allocated: shape={tuple(self.buffer.shape)}, "
+            f"size={size_mb:.2f} MB"
+        )
 
 
 class BaseHostCache:
@@ -49,9 +56,17 @@ class BaseHostCache:
         self.num_tokens = num_tokens
         self.num_layers = num_layers
         self.topk_size = topk_size
+        self._log_allocation()
 
     def get_buffer_size_bytes(self):
         return get_tensor_size_bytes(self.buffer)
+
+    def _log_allocation(self):
+        size_gb = self.get_buffer_size_bytes() / _GB
+        logger.info(
+            f"HostCache allocated: shape={tuple(self.buffer.shape)}, "
+            f"size={size_gb:.2f} GB"
+        )
 
 
 @dataclasses.dataclass

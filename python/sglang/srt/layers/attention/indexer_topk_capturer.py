@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 
 from sglang.srt.layers.dp_attention import get_attention_tp_size
-from sglang.srt.layers.topk_capturer_base import _GB, _MB, BaseTopkCapturer
+from sglang.srt.layers.topk_capturer_base import BaseTopkCapturer
 
 logger = logging.getLogger(__name__)
 
@@ -35,17 +35,6 @@ class IndexerTopkCapturer(BaseTopkCapturer):
             num_layers=self.num_indexer_layers,
             topk_size=self.index_topk,
             device=device,
-        )
-
-        self._log_allocation()
-
-    def _log_allocation(self):
-        host_size_gb = self.host_cache.get_buffer_size_bytes() / _GB
-        device_size_mb = self.device_cache.get_buffer_size_bytes() / _MB
-        logger.info(
-            f"IndexerTopkCapturer allocated: "
-            f"num_indexer_layers={self.num_indexer_layers}, index_topk={self.index_topk}, "
-            f"host_cache={host_size_gb:.2f}GB, device_cache={device_size_mb:.2f}MB"
         )
 
 
