@@ -1,37 +1,25 @@
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from sglang.srt.layers.dp_attention import get_attention_tp_size
 from sglang.srt.layers.topk_capturer_base import _GB, _MB, BaseTopkCapturer
 
-if TYPE_CHECKING:
-    from sglang.srt.configs.model_config import ModelConfig
-
 logger = logging.getLogger(__name__)
-
-INDEX_TOPK = 512
-
-
-def _count_indexer_layers(model_config: "ModelConfig") -> int:
-    compress_ratios = getattr(model_config.hf_text_config, "compress_ratios", None)
-    if compress_ratios is None:
-        return 0
-    return sum(1 for r in compress_ratios if r == 4)
 
 
 class IndexerTopkCapturer(BaseTopkCapturer):
     def __init__(
         self,
-        model_config: "ModelConfig",
         num_tokens: int,
         num_indexer_layers: int,
+        index_topk: int,
         max_running_requests: int,
         device: str,
     ):
         from sglang.srt.server_args import get_global_server_args
 
         self.num_indexer_layers = num_indexer_layers
-        self.index_topk = getattr(model_config.hf_text_config, "index_topk", INDEX_TOPK)
+        self.index_topk = index_topk
 
         server_args = get_global_server_args()
         max_batch_size = max(
@@ -76,21 +64,21 @@ def set_global_indexer_capturer(capturer: Optional[IndexerTopkCapturer]):
 
 def create_indexer_capturer(
     enable: bool,
-    model_config: "ModelConfig",
+    num_indexer_layers: int,
+    index_topk: int,
     num_tokens: int,
     max_running_requests: int,
     device: str,
 ) -> Optional[IndexerTopkCapturer]:
     if not enable:
         return None
-    num_indexer_layers = _count_indexer_layers(model_config)
     if num_indexer_layers == 0:
         logger.warning("No indexer layers found, IndexerTopkCapturer disabled")
         return None
     return IndexerTopkCapturer(
-        model_config=model_config,
         num_tokens=num_tokens,
         num_indexer_layers=num_indexer_layers,
+        index_topk=index_topk,
         max_running_requests=max_running_requests,
         device=device,
     )

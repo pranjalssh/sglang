@@ -832,10 +832,16 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         )
 
     def init_indexer_capturer(self):
+        # Models that wire up an indexer (currently DSV4 only) expose these on
+        # hf_text_config; other models leave them unset and the capturer is skipped.
+        hf_text_config = self.model_config.hf_text_config
+        num_indexer_layers = getattr(hf_text_config, "num_indexer_layers", 0)
+        index_topk = getattr(hf_text_config, "index_topk", 0)
         set_global_indexer_capturer(
             create_indexer_capturer(
                 enable=get_global_server_args().enable_return_indexer_topk,
-                model_config=self.model_config,
+                num_indexer_layers=num_indexer_layers,
+                index_topk=index_topk,
                 num_tokens=self.max_total_num_tokens + self.page_size,
                 max_running_requests=self.max_running_requests,
                 device=self.device,
